@@ -1,0 +1,173 @@
+---
+title: "Kubernetes and Helm Tricks"
+description: "Some k8s and helm trics to easier one's life."
+date: "Nov 04 2024"
+---
+# Helm Chart Templating Tricks
+
+_Some trick to alleviate the daily Helm burden of managing multiple equal resources in your deployments._
+
+{/* truncate */}
+
+---
+
+I've been writing a little bit of Helm chart code for my job, because a lot of deployments are outdated and we are migrating our CI/CD pipelines from Drone.io to Argo Workflows.
+
+Modularity and flow control is a must in order to avoid complexity.
+
+Let's go to the example. Below is a modified Ingress recipe template for k8s:
+
+```yaml
+{{- $svcPort := .Values.service.port -}}
+{{- if .Values.ingresses.enabled -}}
+{{- range .Values.ingresses.ingress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .name }}
+  namespace: {{ .namespace }}
+  labels:
+{{ include "app.labels" $ | indent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+{{- if .tls }}
+  tls:
+  {{- range .tls }}
+    - hosts:
+    {{- range .hosts }}
+      - {{ . | quote }}
+    {{- end }}
+      secretName: {{ .secretName }}
+  {{- end }}
+{{- end }}
+  rules:
+{{- range .rules }}
+    - host: {{ .hosts | quote }}
+      http:
+      {{- range .http.paths }}
+        paths:
+          - path: {{ .path | quote }}
+            pathType: {{ .pathType | quote }}
+            backend:
+              service:
+                name: {{ .backend.service.name | quote }}
+                port:
+                  number: {{ .backend.service.port.number | default $svcPort }}   
+      {{- end }}  
+{{- end }}
+{{- end }}
+{{- end }}
+```
+
+It's  modular enough so you can attach and remove ingresses as needed without much hurdle.
+
+Here follows the `value.yaml` example. 
+
+It can have a vast number of ingresses each one starting at "name":
+
+```yaml
+ingresses:
+enabled: true
+ingress:
+    - name: ingress-1
+    namespace: namespace
+    annotations:
+    ...
+    tls:
+        - hosts: my.host.com
+        secretName: tls-my-host.com
+    rules:
+        - hosts: my.host.com
+        http:
+            paths:
+            - path: /
+            pathType: Prefix
+            backend:
+                service:
+                name: "service-name"
+                port:
+                    number: 80
+    - name: ingress-2
+```
+
+This works for any object, and could save you face when you need to plan for a modularized model to be 
+used for your apps.
+
+---
+
+# Pod Recurrent Restarts
+
+_Ever wondered how to cycle your deployment/pods the native way? Think no more!_
+
+ {/* truncate */}
+
+---
+
+```jsx title="Roles and account creation" showLineNumbers
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployment-restart
+  namespace: ns-name
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-restart
+  namespace: ns-name
+rules:
+  - apiGroups: ["apps", "extensions"]
+    resources: ["deployments"]
+    resourceNames: ["deployment-name"]
+    verbs: ["get", "patch", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployment-restart
+  namespace: ns-name
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployment-restart
+subjects:
+  - kind: ServiceAccount
+    name: deployment-restart
+    namespace: ns-name
+EOF
+```
+
+```jsx title="Cronjob creation" showLineNumbers
+kubectl apply -f - <<EOF
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: deployment-restart
+  namespace: ns-name
+spec:
+  schedule: "* */5 * * *"
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        spec:
+          serviceAccountName: deployment-restart
+          containers:
+            - command:
+                - bash
+                - -c
+                - >-
+                  kubectl rollout restart deployment/deployment-name && kubectl rollout status deployment/deployment-name
+              image: bitnami/kubectl
+              imagePullPolicy: IfNotPresent
+              name: kubectl
+          restartPolicy: Never
+EOF
+```
+

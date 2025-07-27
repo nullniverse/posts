@@ -7,8 +7,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Geist", ...defaultTheme.fontFamily.sans],
-        mono: ["'Geist Mono'", ...defaultTheme.fontFamily.mono],
+        sans: ["Sansation", ...defaultTheme.fontFamily.sans],
+        mono: ["Monomaniac One", ...defaultTheme.fontFamily.mono],
       },
     },
   },

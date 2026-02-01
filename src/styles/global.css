@@ -24,6 +24,55 @@
 }
 
 @layer components {
+  /* Tunable main column width (matches Tailwind Typography default ~65ch) */
+  :root {
+    --content-max: 65ch;
+  } /* adjust to your column width */
+
+  /* ASCII globe background (behind everything) */
+  .ascii-globe-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    display: grid;
+    place-items: center;
+    opacity: 0.085; /* tweak intensity */
+  }
+  .ascii-globe {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
+      "Liberation Mono", monospace;
+    white-space: pre;
+    line-height: 1;
+    letter-spacing: 0;
+    color: hsl(var(--muted-foreground, 215.4 16.3% 46.9%));
+    user-select: none;
+  }
+  @media (prefers-color-scheme: light) {
+    .ascii-globe {
+      color: hsl(var(--foreground, 222.2 84% 4.9%));
+    }
+  }
+
+  /* Center cover to keep background out from behind the main text block */
+  .ascii-globe-cover {
+    position: fixed;
+    inset-block: 0;
+    left: 50%;
+    width: min(var(--content-max), 100vw);
+    transform: translateX(-50%);
+    background: hsl(var(--background, 0 0% 100%));
+    z-index: -1; /* above globe, below content */
+    pointer-events: none;
+  }
+
+  /* Optional: hide effect on small screens */
+  @media (max-width: 767px) {
+    .ascii-globe-bg,
+    .ascii-globe-cover {
+      display: none;
+    }
+  }
   article {
     p {
       @apply my-4 leading-relaxed;
